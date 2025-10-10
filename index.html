@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>出退勤打刻</title>
+  <script src="https://static.line-scdn.net/liff/edge/2.1/sdk.js"></script>
+</head>
+<body>
+  <div id="msg">読み込み中...</div>
+  <script>
+    // ✅ ここにあなたのLIFF IDを設定
+    const LIFF_ID = "YOUR_LIFF_ID";  
+    // ✅ GASのWebアプリURL
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbyXXXXXXX/exec";
+
+    async function main() {
+      await liff.init({ liffId: LIFF_ID });
+      if (!liff.isLoggedIn()) {
+        liff.login();
+        return;
+      }
+
+      const profile = await liff.getProfile();
+      const userId = profile.userId;
+      const urlParams = new URLSearchParams(window.location.search);
+      const mode = urlParams.get("mode"); // clockin or clockout
+
+      const endpoint = `${GAS_URL}?mode=${mode}&userId=${userId}`;
+
+      document.getElementById("msg").innerText = "打刻中です...";
+      fetch(endpoint)
+        .then(res => res.text())
+        .then(text => {
+          document.getElementById("msg").innerText = text;
+        })
+        .catch(err => {
+          document.getElementById("msg").innerText = "⚠️ エラー：" + err.message;
+        });
+    }
+    main();
+  </script>
+</body>
+</html>
