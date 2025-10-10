@@ -14,30 +14,37 @@
     const GAS_URL = "https://script.google.com/macros/s/AKfycbzgLzzNATmQEVogsa56O9GKfdpbAzrOmpOyWO9OLYd7GqeFMati6aNExH0xDPE59wUX/exec";
 
     async function main() {
+    try {
       await liff.init({ liffId: LIFF_ID });
+      console.log("✅ LIFF初期化OK");
       if (!liff.isLoggedIn()) {
+        console.log("🔁 LINEログイン開始");
         liff.login();
         return;
       }
 
       const profile = await liff.getProfile();
-      const userId = profile.userId;
+      console.log("👤 userId:", profile.userId);
+
       const urlParams = new URLSearchParams(window.location.search);
-      const mode = urlParams.get("mode"); // clockin or clockout
+      const mode = urlParams.get("mode");
+      if (!mode) {
+        document.getElementById("msg").innerText = "⚠️ mode指定がありません。";
+        return;
+      }
 
-      const endpoint = `${GAS_URL}?mode=${mode}&userId=${userId}`;
-
+      const endpoint = `${GAS_URL}?mode=${mode}&userId=${profile.userId}`;
       document.getElementById("msg").innerText = "打刻中です...";
-      fetch(endpoint)
-        .then(res => res.text())
-        .then(text => {
-          document.getElementById("msg").innerText = text;
-        })
-        .catch(err => {
-          document.getElementById("msg").innerText = "⚠️ エラー：" + err.message;
-        });
+
+      const res = await fetch(endpoint);
+      const text = await res.text();
+      document.getElementById("msg").innerText = text;
+    } catch (err) {
+      console.error("❌ LIFFエラー", err);
+      document.getElementById("msg").innerText = "⚠️ エラー：" + err.message;
     }
-    main();
+  }
+  main();
   </script>
 </body>
 </html>
