@@ -6,39 +6,66 @@
   <title>出退勤打刻</title>
   <script src="https://static.line-scdn.net/liff/edge/2.1/sdk.js"></script>
   <style>
-    body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;
-         font-family:-apple-system,system-ui,"Noto Sans JP",sans-serif;background:#0f1115;color:#eaf1ff}
+    body{
+      margin:0;
+      height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-family:-apple-system,system-ui,"Noto Sans JP",sans-serif;
+      background:#0f1115;
+      color:#eaf1ff
+    }
     #msg{font-weight:700;letter-spacing:.02em}
   </style>
 </head>
 <body>
   <div id="msg">打刻中です...</div>
   <script>
+    // ★ 自分の LIFF ID と GAS の WebアプリURL(/exec) に置き換え
     const LIFF_ID = "2008264104-nGG087xY";
     const GAS_URL = "https://script.google.com/macros/s/AKfycbxsxQi-ezXiUgc5OBlIfN3tC5XDoheU878ATNeNnpfbnoi2GuB3vhC7ADHfeHPy6Ragbg/exec";
 
     (async function main(){
+      const msgEl = document.getElementById("msg");
       try{
         await liff.init({ liffId: LIFF_ID });
-        if(!liff.isLoggedIn()){ liff.login(); return; }
 
-        const { userId } = await liff.getProfile();
-        const mode = new URLSearchParams(location.search).get("mode");
-        if(!mode){ document.getElementById("msg").innerText = "⚠️ mode指定がありません。"; return; }
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
 
-        document.getElementById("msg").innerText = "打刻中です...";
-        const endpoint = `${GAS_URL}?mode=${encodeURIComponent(mode)}&userId=${encodeURIComponent(userId)}`;
+        // ?mode=in / ?mode=out を取得
+        const params = new URLSearchParams(location.search);
+        const mode = (params.get("mode") || "").toLowerCase();
+        if (!mode) {
+          msgEl.innerText = "⚠️ mode指定がありません。（?mode=in または ?mode=out）";
+          return;
+        }
+
+        const profile = await liff.getProfile();
+        const userId = profile.userId;
+
+        msgEl.innerText = "打刻中です...";
+
+        const endpoint =
+          `${GAS_URL}?mode=${encodeURIComponent(mode)}&uid=${encodeURIComponent(userId)}`;
 
         const res = await fetch(endpoint, { cache: "no-store" });
-        if(!res.ok) throw new Error("サーバーエラー(" + res.status + ")");
 
-        // ✅ 完了後は画面を閉じる（“打刻中”のままでOK）
+        if (!res.ok) {
+          throw new Error("サーバーエラー(" + res.status + ")");
+        }
+
+        // ★ 正常終了 → 画面クローズ（LINE側に結果メッセージを別途送る）
         liff.closeWindow();
 
-        // もし閉じずに一言だけ出したいなら、上の1行を消して↓を有効化
-        // document.getElementById("msg").innerText = "打刻完了！LINEの通知をご確認ください。";
+        // もし閉じずに一言表示したい場合：
+        // const text = await res.text();
+        // msgEl.innerText = text || "打刻完了しました。";
       }catch(err){
-        document.getElementById("msg").innerText = "⚠️ エラー：" + err.message;
+        msgEl.innerText = "⚠️ エラー：" + err.message;
       }
     })();
   </script>
