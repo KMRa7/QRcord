@@ -24,7 +24,7 @@
   <div id="msg">LIFF起動中です...</div>
   <script>
     const LIFF_ID = "2008264104-nGG087xY"; // ←そのままでOK（自分のID）
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbzm23exT6JXoaNULDtPDBQLdl4MCrqbLKsfvgIFElsjICta_vmoOdANOViNaL_VyaskYA/exec";
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbwzIVce1SaVVTaoDQpXVLyA9MyBDA7iaSVWItHnuFRfufIdN7xuVVqUIQEE-KFwAWHB/exec";
 
     const msgEl = document.getElementById("msg");
     const show = (text) => {
@@ -107,7 +107,7 @@
 
 
         // 実運用ではこれに戻す：
-        // liff.closeWindow();
+        liff.closeWindow();
 
       }catch(err){
         console.error(err);
