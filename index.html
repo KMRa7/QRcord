@@ -83,35 +83,25 @@
 
         console.log("fetch to:", endpoint);
 
-        let res;
         try {
-          res = await fetch(endpoint, {
+          await fetch(endpoint, {
             method: "GET",
+            mode: "no-cors",   // ← これがポイント
             cache: "no-store",
           });
         } catch (err) {
-          // ネットワークレベルで失敗した場合（Load failed とか）
-          show("⚠️ fetch自体が失敗しました\nmessage: " + err.message);
+          // ここに来るのは、本当にネットワークが死んでる時など
+          show("⚠️ ネットワークエラーっぽいです\nmessage: " + err.message);
           return;
         }
-
-        let bodyText = "";
-        try {
-          bodyText = await res.text();
-        } catch (err) {
-          bodyText = "(レスポンス本文の取得に失敗: " + err.message + ")";
-        }
-
-        console.log("status:", res.status, "body:", bodyText);
-
-        if (!res.ok) {
-          show(
-            "⚠️ サーバーエラー\n" +
-            "HTTPステータス: " + res.status + "\n" +
-            "レスポンス本文:\n" + bodyText
-          );
-          return;
-        }
+        
+        // no-cors だとレスポンスは読めないので、成功前提で進む
+        show("打刻リクエストを送信しました。\nシートに記録されたかは後で確認してください。");
+        
+        // 実運用ならすぐ閉じてOK
+        setTimeout(() => {
+          liff.closeWindow();
+        }, 800);
 
         // ★ ここでGASの返事を画面に出す（今はまだ閉じない）
         show(
