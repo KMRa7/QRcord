@@ -17,31 +17,27 @@
       color:#eaf1ff;
       text-align:center;
     }
-    #msg{font-weight:700;letter-spacing:.02em;line-height:1.6;}
+    #msg{font-weight:700;letter-spacing:.02em;line-height:1.6;white-space:pre-wrap;}
   </style>
 </head>
 <body>
   <div id="msg">LIFF起動中です...</div>
   <script>
-    // ★ 自分の LIFF ID と GAS の WebアプリURL(/exec) に置き換え
-    const LIFF_ID = "2008264104-nGG087xY"; // ←あなたのLIFF ID
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbwSd5MB3Nqagc58yicDO2xVMbcFMwENYOyrzqZbo86U8HVoq2AEAkM-ctzQFheEGdko1Q/exec"; // ←あなたのGAS URL (/exec)
+    const LIFF_ID = "2008264104-nGG087xY"; // ←そのままでOK（自分のID）
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbwSd5MB3Nqagc58yicDO2xVMbcFMwENYOyrzqZbo86U8HVoq2AEAkM-ctzQFheEGdko1Q/exec";
 
     const msgEl = document.getElementById("msg");
-
-    // デバッグ用メッセージ表示
-    function show(text) {
+    const show = (text) => {
       console.log(text);
       msgEl.innerText = text;
-    }
+    };
 
-    // URL から mode を取得（?mode=in / ?mode=out）
+    // mode を取得（?mode=in / ?mode=out または liff.state 内の ?mode=）
     function getMode() {
       const params = new URLSearchParams(location.search);
       const directMode = (params.get("mode") || "").toLowerCase();
       if (directMode) return directMode;
 
-      // 念のため liff.state 経由も見る（LIFF URLにつけたクエリが一時的にここに入ることがある）
       const state = params.get("liff.state");
       if (!state) return "";
 
@@ -55,59 +51,82 @@
 
         await liff.init({ liffId: LIFF_ID });
 
-        // ここまで来ていれば liff.state が展開されて URL が整っている想定
         show("ログイン状態を確認中...");
-
         if (!liff.isLoggedIn()) {
-          // ログイン完了後、同じURLに戻ってくる
           liff.login();
           return;
         }
 
         show("打刻モード確認中...");
-
         const mode = getMode();
         if (!mode) {
           show("⚠️ mode指定がありません。\n?mode=in または ?mode=out を付けて起動してください。");
           return;
         }
         if (mode !== "in" && mode !== "out") {
-          show("⚠️ 不正な mode です。（in / out のみ有効）");
+          show("⚠️ 不正な mode です。（in / out のみ有効）\n取得値: " + mode);
           return;
         }
 
         show("プロフィール取得中...");
-
         const profile = await liff.getProfile();
         const userId = profile.userId;
 
-        show("打刻送信中...");
+        show(
+          "打刻送信中...\n" +
+          "mode: " + mode + "\n" +
+          "userId: " + userId
+        );
 
         const endpoint =
           `${GAS_URL}?mode=${encodeURIComponent(mode)}&uid=${encodeURIComponent(userId)}`;
 
         console.log("fetch to:", endpoint);
 
-        const res = await fetch(endpoint, {
-          method: "GET",
-          cache: "no-store",
-        });
-
-        if (!res.ok) {
-          throw new Error("サーバーエラー(" + res.status + ")");
+        let res;
+        try {
+          res = await fetch(endpoint, {
+            method: "GET",
+            cache: "no-store",
+          });
+        } catch (err) {
+          // ネットワークレベルで失敗した場合（Load failed とか）
+          show("⚠️ fetch自体が失敗しました\nmessage: " + err.message);
+          return;
         }
 
-        // 必要ならレスポンス本文を見る
-        const text = await res.text();
-        console.log("GAS response:", text);
+        let bodyText = "";
+        try {
+          bodyText = await res.text();
+        } catch (err) {
+          bodyText = "(レスポンス本文の取得に失敗: " + err.message + ")";
+        }
 
-        // ★ 成功時は自動クローズ（ここはお好みで）
-        // show("打刻完了しました。画面を閉じます。");
-        liff.closeWindow();
+        console.log("status:", res.status, "body:", bodyText);
+
+        if (!res.ok) {
+          show(
+            "⚠️ サーバーエラー\n" +
+            "HTTPステータス: " + res.status + "\n" +
+            "レスポンス本文:\n" + bodyText
+          );
+          return;
+        }
+
+        // ★ ここでGASの返事を画面に出す（今はまだ閉じない）
+        show(
+          "打刻成功っぽいです 🎉\n\n" +
+          "HTTPステータス: " + res.status + "\n" +
+          "レスポンス本文:\n" + bodyText + "\n\n" +
+          "※動作確認できたら liff.closeWindow() に戻してOK"
+        );
+
+        // 実運用ではこれに戻す：
+        // liff.closeWindow();
 
       }catch(err){
         console.error(err);
-        show("⚠️ エラー：" + err.message);
+        show("⚠️ 想定外のエラー:\n" + (err.message || String(err)));
       }
     })();
   </script>
