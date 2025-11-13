@@ -14,58 +14,100 @@
       justify-content:center;
       font-family:-apple-system,system-ui,"Noto Sans JP",sans-serif;
       background:#0f1115;
-      color:#eaf1ff
+      color:#eaf1ff;
+      text-align:center;
     }
-    #msg{font-weight:700;letter-spacing:.02em}
+    #msg{font-weight:700;letter-spacing:.02em;line-height:1.6;}
   </style>
 </head>
 <body>
-  <div id="msg">打刻中です...</div>
+  <div id="msg">LIFF起動中です...</div>
   <script>
     // ★ 自分の LIFF ID と GAS の WebアプリURL(/exec) に置き換え
-    const LIFF_ID = "2008264104-nGG087xY";
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbwSd5MB3Nqagc58yicDO2xVMbcFMwENYOyrzqZbo86U8HVoq2AEAkM-ctzQFheEGdko1Q/exec";
+    const LIFF_ID = "2008264104-nGG087xY"; // ←あなたのLIFF ID
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbwSd5MB3Nqagc58yicDO2xVMbcFMwENYOyrzqZbo86U8HVoq2AEAkM-ctzQFheEGdko1Q/exec"; // ←あなたのGAS URL (/exec)
+
+    const msgEl = document.getElementById("msg");
+
+    // デバッグ用メッセージ表示
+    function show(text) {
+      console.log(text);
+      msgEl.innerText = text;
+    }
+
+    // URL から mode を取得（?mode=in / ?mode=out）
+    function getMode() {
+      const params = new URLSearchParams(location.search);
+      const directMode = (params.get("mode") || "").toLowerCase();
+      if (directMode) return directMode;
+
+      // 念のため liff.state 経由も見る（LIFF URLにつけたクエリが一時的にここに入ることがある）
+      const state = params.get("liff.state");
+      if (!state) return "";
+
+      const stateParams = new URLSearchParams(state);
+      return (stateParams.get("mode") || "").toLowerCase();
+    }
 
     (async function main(){
-      const msgEl = document.getElementById("msg");
       try{
+        show("LIFF 初期化中...");
+
         await liff.init({ liffId: LIFF_ID });
 
+        // ここまで来ていれば liff.state が展開されて URL が整っている想定
+        show("ログイン状態を確認中...");
+
         if (!liff.isLoggedIn()) {
+          // ログイン完了後、同じURLに戻ってくる
           liff.login();
           return;
         }
 
-        // ?mode=in / ?mode=out を取得
-        const params = new URLSearchParams(location.search);
-        const mode = (params.get("mode") || "").toLowerCase();
+        show("打刻モード確認中...");
+
+        const mode = getMode();
         if (!mode) {
-          msgEl.innerText = "⚠️ mode指定がありません。（?mode=in または ?mode=out）";
+          show("⚠️ mode指定がありません。\n?mode=in または ?mode=out を付けて起動してください。");
           return;
         }
+        if (mode !== "in" && mode !== "out") {
+          show("⚠️ 不正な mode です。（in / out のみ有効）");
+          return;
+        }
+
+        show("プロフィール取得中...");
 
         const profile = await liff.getProfile();
         const userId = profile.userId;
 
-        msgEl.innerText = "打刻中です...";
+        show("打刻送信中...");
 
         const endpoint =
           `${GAS_URL}?mode=${encodeURIComponent(mode)}&uid=${encodeURIComponent(userId)}`;
 
-        const res = await fetch(endpoint, { cache: "no-store" });
+        console.log("fetch to:", endpoint);
+
+        const res = await fetch(endpoint, {
+          method: "GET",
+          cache: "no-store",
+        });
 
         if (!res.ok) {
           throw new Error("サーバーエラー(" + res.status + ")");
         }
 
-        // ★ 正常終了 → 画面クローズ（LINE側に結果メッセージを別途送る）
+        // 必要ならレスポンス本文を見る
+        const text = await res.text();
+        console.log("GAS response:", text);
+
+        // ★ 成功時は自動クローズ（ここはお好みで）
+        // show("打刻完了しました。画面を閉じます。");
         liff.closeWindow();
 
-        // もし閉じずに一言表示したい場合：
-        // const text = await res.text();
-        // msgEl.innerText = text || "打刻完了しました。";
       }catch(err){
-        msgEl.innerText = "⚠️ エラー：" + err.message;
+        console.error(err);
+        show("⚠️ エラー：" + err.message);
       }
     })();
   </script>
