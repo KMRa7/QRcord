@@ -6,112 +6,39 @@
   <title>出退勤打刻</title>
   <script src="https://static.line-scdn.net/liff/edge/2.1/sdk.js"></script>
   <style>
-    body{
-      margin:0;
-      height:100vh;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-family:-apple-system,system-ui,"Noto Sans JP",sans-serif;
-      background:#0f1115;
-      color:#eaf1ff;
-      text-align:center;
-    }
-    #msg{font-weight:700;letter-spacing:.02em;line-height:1.6;white-space:pre-wrap;}
+    body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;
+         font-family:-apple-system,system-ui,"Noto Sans JP",sans-serif;background:#0f1115;color:#eaf1ff}
+    #msg{font-weight:700;letter-spacing:.02em}
   </style>
 </head>
 <body>
-  <div id="msg">LIFF起動中です...</div>
+  <div id="msg">打刻中です...</div>
   <script>
-    const LIFF_ID = "2008264104-nGG087xY"; // ←そのままでOK（自分のID）
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbwzIVce1SaVVTaoDQpXVLyA9MyBDA7iaSVWItHnuFRfufIdN7xuVVqUIQEE-KFwAWHB/exec";
-
-    const msgEl = document.getElementById("msg");
-    const show = (text) => {
-      console.log(text);
-      msgEl.innerText = text;
-    };
-
-    // mode を取得（?mode=in / ?mode=out または liff.state 内の ?mode=）
-    function getMode() {
-      const params = new URLSearchParams(location.search);
-      const directMode = (params.get("mode") || "").toLowerCase();
-      if (directMode) return directMode;
-
-      const state = params.get("liff.state");
-      if (!state) return "";
-
-      const stateParams = new URLSearchParams(state);
-      return (stateParams.get("mode") || "").toLowerCase();
-    }
+    const LIFF_ID = "2008264104-nGG087xY";
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbxeloXqcOmRa-HQBC-a_5IPePLwxFzGG33xqR1NbTadsWuuGty_P7hlBN-kWllqb4Dk/exec";
 
     (async function main(){
       try{
-        show("LIFF 初期化中...");
-
         await liff.init({ liffId: LIFF_ID });
+        if(!liff.isLoggedIn()){ liff.login(); return; }
 
-        show("ログイン状態を確認中...");
-        if (!liff.isLoggedIn()) {
-          liff.login();
-          return;
-        }
+        const { userId } = await liff.getProfile();
+        const mode = new URLSearchParams(location.search).get("mode");
+        if(!mode){ document.getElementById("msg").innerText = "⚠️ mode指定がありません。"; return; }
 
-        show("打刻モード確認中...");
-        const mode = getMode();
-        if (!mode) {
-          show("⚠️ mode指定がありません。\n?mode=in または ?mode=out を付けて起動してください。");
-          return;
-        }
-        if (mode !== "in" && mode !== "out") {
-          show("⚠️ 不正な mode です。（in / out のみ有効）\n取得値: " + mode);
-          return;
-        }
+        document.getElementById("msg").innerText = "打刻中です...";
+        const endpoint = `${GAS_URL}?mode=${encodeURIComponent(mode)}&userId=${encodeURIComponent(userId)}`;
 
-        show("プロフィール取得中...");
-        const profile = await liff.getProfile();
-        const userId = profile.userId;
+        const res = await fetch(endpoint, { cache: "no-store" });
+        if(!res.ok) throw new Error("サーバーエラー(" + res.status + ")");
 
-        show(
-          "打刻送信中...\n" +
-          "mode: " + mode + "\n" +
-          "userId: " + userId
-        );
-
-        const endpoint =
-          `${GAS_URL}?mode=${encodeURIComponent(mode)}&uid=${encodeURIComponent(userId)}`;
-        
-        console.log("fetch to:", endpoint);
-        
-        try {
-          await fetch(endpoint, {
-            method: "GET",
-            mode: "no-cors",   // CORS を気にせず投げる
-            cache: "no-store",
-          });
-        } catch (err) {
-          // ここに来るのは「本当に接続できなかった」時だけ
-          show("⚠️ ネットワークエラーっぽいです\nmessage: " + err.message);
-          return;
-        }
-        
-        // ここまで来たら「リクエストは送れた」とみなす
-        show("打刻リクエストを送信しました。\nシートに記録されたかは後で確認してください。");
-        
-        // 実運用ならすぐ閉じる
-        setTimeout(() => {
-          liff.closeWindow();
-        }, 800);
-        
-        return; // ここで終了
-
-
-        // 実運用ではこれに戻す：
+        // ✅ 完了後は画面を閉じる（“打刻中”のままでOK）
         liff.closeWindow();
 
+        // もし閉じずに一言だけ出したいなら、上の1行を消して↓を有効化
+        // document.getElementById("msg").innerText = "打刻完了！LINEの通知をご確認ください。";
       }catch(err){
-        console.error(err);
-        show("⚠️ 想定外のエラー:\n" + (err.message || String(err)));
+        document.getElementById("msg").innerText = "⚠️ エラー：" + err.message;
       }
     })();
   </script>
