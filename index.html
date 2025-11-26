@@ -30,82 +30,100 @@
   <div id="msg">打刻中です...</div>
 
   <script>
-    const LIFF_ID = "2008264104-174AXY5L"; // そのまま
-    const GAS_URL = "https://script.google.com/macros/s/AKfycby8hX8CD7b8hNS8AVQVrsyIhvsQmwOXAZjbcTzuxo5o30XY9HhXQn8jvH7dQs2TlLeipA/exec";
+  const LIFF_ID = "2008264104-174AXY5L"; // そのまま
+  const GAS_URL = "https://script.google.com/macros/s/AKfycby8hX8CD7b8hNS8AVQVrsyIhvsQmwOXAZjbcTzuxo5o30XY9HhXQn8jvH7dQs2TlLeipA/exec";
 
-    const msgEl = document.getElementById("msg");
-    const show = (text) => {
-      console.log(text);
-      msgEl.innerText = text;
-    };
+  const msgEl = document.getElementById("msg");
+  const show = (text) => {
+    console.log(text);
+    msgEl.innerText = text;
+  };
 
-    // mode を取得（?mode=in / ?mode=out または liff.state 内の ?mode=）
-    function getMode() {
-      const params = new URLSearchParams(location.search);
-      const directMode = (params.get("mode") || "").toLowerCase();
-      if (directMode) return directMode;
+  // mode を取得（?mode=in / ?mode=out または liff.state 内の ?mode=）
+  function getMode() {
+    const params = new URLSearchParams(location.search);
+    const directMode = (params.get("mode") || "").toLowerCase();
+    if (directMode) return directMode;
 
-      const state = params.get("liff.state");
-      if (!state) return "";
+    const state = params.get("liff.state");
+    if (!state) return "";
 
-      const stateParams = new URLSearchParams(state);
-      return (stateParams.get("mode") || "").toLowerCase();
-    }
+    const stateParams = new URLSearchParams(state);
+    return (stateParams.get("mode") || "").toLowerCase();
+  }
 
-    (async function main(){
-      try{
-        // 見た目は最初から最後まで「打刻中です...」
-        show("打刻中です...");
+  (async function main(){
+    try{
+      // 見た目は最初に「打刻中です...」
+      show("打刻中です...");
 
-        await liff.init({ liffId: LIFF_ID });
+      await liff.init({ liffId: LIFF_ID });
 
-        if (!liff.isLoggedIn()) {
-          liff.login();
-          return;
-        }
-
-        const mode = getMode();
-        if (!mode) {
-          show("⚠️ mode指定がありません。\n?mode=in または ?mode=out を付けて起動してください。");
-          return;
-        }
-        if (mode !== "in" && mode !== "out") {
-          show("⚠️ 不正な mode です。（in / out のみ有効）\n取得値: " + mode);
-          return;
-        }
-
-        const profile = await liff.getProfile();
-        const userId = profile.userId;
-
-        const gasMode = mode === "in" ? "clockin" : "clockout";
-        const endpoint =
-          `${GAS_URL}?mode=${encodeURIComponent(mode)}&uid=${encodeURIComponent(userId)}`;
-        
-        console.log("fetch to:", endpoint);
-        
-        try {
-          await fetch(endpoint, {
-            method: "GET",
-            mode: "no-cors",   // レスポンスは読まない前提
-            cache: "no-store",
-          });
-        } catch (err) {
-          show("⚠️ ネットワークエラーっぽいです\nmessage: " + err.message);
-          return;
-        }
-        
-        // ★ ここから：チャット送信せず、画面だけで完結
-        if (mode === "in") {
-          show("✅ 出勤の打刻が完了しました。\nこの画面を閉じていただいて大丈夫です。");
-        } else {
-          show("🌙 退勤の打刻が完了しました。\nこの画面を閉じていただいて大丈夫です。");
-        }
-
-      }catch(err){
-        console.error(err);
-        show("⚠️ 想定外のエラー:\n" + (err.message || String(err)));
+      if (!liff.isLoggedIn()) {
+        liff.login();
+        return;
       }
-    })();
-  </script>
+
+      const mode = getMode();
+      if (!mode) {
+        show("⚠️ mode指定がありません。\n?mode=in または ?mode=out を付けて起動してください。");
+        return;
+      }
+      if (mode !== "in" && mode !== "out") {
+        show("⚠️ 不正な mode です。（in / out のみ有効）\n取得値: " + mode);
+        return;
+      }
+
+      const profile = await liff.getProfile();
+      const userId = profile.userId;
+
+      const endpoint =
+        `${GAS_URL}?mode=${encodeURIComponent(mode)}&uid=${encodeURIComponent(userId)}`;
+
+      console.log("fetch to:", endpoint);
+
+      let data;
+      try {
+        const res = await fetch(endpoint, {
+          method: "GET",
+          cache: "no-store",
+          // ※ no-cors を外すことで JSON を読めるようにする
+        });
+
+        if (!res.ok) {
+          throw new Error("HTTP " + res.status);
+        }
+
+        data = await res.json();
+      } catch (err) {
+        show("⚠️ ネットワークエラーっぽいです\nmessage: " + err.message);
+        return;
+      }
+
+      if (!data || typeof data.message !== "string") {
+        show("⚠️ 予期しない応答形式です。");
+        return;
+      }
+
+      // ★ エラー時：GAS側のエラーメッセージをそのまま表示
+      if (!data.ok) {
+        show(data.message); // 例）「⚠️ 本日のシフトが登録されていないため、出勤打刻できません…」
+        return;
+      }
+
+      // ★ 正常時：今までどおりの固定メッセージ
+      //   （もし recordClockIn の文言をそのまま出したければ show(data.message); に変えてOK）
+      if (mode === "in") {
+        show("✅ 出勤の打刻が完了しました。\nこの画面を閉じていただいて大丈夫です。");
+      } else {
+        show("🌙 退勤の打刻が完了しました。\nこの画面を閉じていただいて大丈夫です。");
+      }
+
+    } catch(err){
+      console.error(err);
+      show("⚠️ 想定外のエラー:\n" + (err.message || String(err)));
+    }
+  })();
+</script>
 </body>
 </html>
