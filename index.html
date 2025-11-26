@@ -77,8 +77,9 @@
         const profile = await liff.getProfile();
         const userId = profile.userId;
 
+        const gasMode = mode === "in" ? "clockin" : "clockout";
         const endpoint =
-          `${GAS_URL}?mode=${encodeURIComponent(mode)}&uid=${encodeURIComponent(userId)}`;
+          `${GAS_URL}?mode=${encodeURIComponent(gasMode)}&userId=${encodeURIComponent(userId)}`;
         
         console.log("fetch to:", endpoint);
         
