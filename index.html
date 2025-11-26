@@ -79,24 +79,27 @@
 
         const gasMode = mode === "in" ? "clockin" : "clockout";
         const endpoint =
-          `${GAS_URL}?mode=${encodeURIComponent(gasMode)}&userId=${encodeURIComponent(userId)}`;
+          `${GAS_URL}?mode=${encodeURIComponent(mode)}&uid=${encodeURIComponent(userId)}`;
         
         console.log("fetch to:", endpoint);
         
         try {
           await fetch(endpoint, {
             method: "GET",
-            mode: "no-cors",   // 元の挙動のまま
+            mode: "no-cors",   // レスポンスは読まない前提
             cache: "no-store",
           });
         } catch (err) {
-          // 本当に接続できなかったときだけエラー表示
           show("⚠️ ネットワークエラーっぽいです\nmessage: " + err.message);
           return;
         }
         
-        // リクエスト送信に成功したらそのまま閉じる（2個目のコードと同じ雰囲気）
-        liff.closeWindow();
+        // ★ ここから：チャット送信せず、画面だけで完結
+        if (mode === "in") {
+          show("✅ 出勤の打刻が完了しました。\nこの画面を閉じていただいて大丈夫です。");
+        } else {
+          show("🌙 退勤の打刻が完了しました。\nこの画面を閉じていただいて大丈夫です。");
+        }
 
       }catch(err){
         console.error(err);
