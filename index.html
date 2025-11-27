@@ -22,16 +22,21 @@
       letter-spacing:.02em;
       line-height:1.6;
       white-space:pre-wrap;
+      padding:16px;
     }
   </style>
 </head>
 <body>
-  <!-- 画面上は常に「打刻中です...」だけ（エラー時だけ書き換え） -->
+  <!-- 画面上は常にテキストのみ（GASのメッセージをそのまま表示） -->
   <div id="msg">打刻中です...</div>
 
   <script>
-  const LIFF_ID = "2008264104-174AXY5L"; // そのまま
-  const GAS_URL = "https://script.google.com/macros/s/AKfycby8hX8CD7b8hNS8AVQVrsyIhvsQmwOXAZjbcTzuxo5o30XY9HhXQn8jvH7dQs2TlLeipA/exec";
+  // ★ 必要に応じて書き換え
+  const LIFF_ID = "2008264104-174AXY5L"; // あなたのLIFF ID
+
+  // ★ ここを「GASのWebアプリURL（/exec）」にする
+  //   例: https://script.google.com/macros/s/XXXX/exec
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbxL_021DiXNJ0zoVbyyU1dCZafOZn50ss-O5uxvYSPVp4fxV2TKSNEWFHlh4aS3WbzVZg/exec";
 
   const msgEl = document.getElementById("msg");
   const show = (text) => {
@@ -39,7 +44,7 @@
     msgEl.innerText = text;
   };
 
-  // mode を取得（?mode=in / ?mode=out または liff.state 内の ?mode=）
+  // mode を取得（?mode=in / ?mode=out または liff.state の ?mode=）
   function getMode() {
     const params = new URLSearchParams(location.search);
     const directMode = (params.get("mode") || "").toLowerCase();
@@ -52,21 +57,37 @@
     return (stateParams.get("mode") || "").toLowerCase();
   }
 
-  (async function main(){
-    try{
-      // 見た目は最初に「打刻中です...」
+  // （保険用）GAS側で code を返していない場合、メッセージからざっくり推定
+  function inferCodeFromMessage(mode, msg) {
+    const s = String(msg || "");
+    if (mode === "in") {
+      if (s.includes("すでに出勤打刻済み")) return "clockin_already";
+      if (s.includes("シフトが登録されていない")) return "clockin_no_shift";
+      if (s.startsWith("✅ 出勤を記録しました")) return "clockin_ok";
+    } else if (mode === "out") {
+      if (s.includes("すでに退勤打刻済み")) return "clockout_already";
+      if (s.includes("シフトが登録されていない")) return "clockout_no_shift";
+      if (s.includes("出勤記録が見つかりません")) return "clockout_no_in";
+      if (s.startsWith("🌙 退勤を記録しました")) return "clockout_ok";
+    }
+    return "unknown";
+  }
+
+  (async function main() {
+    try {
       show("打刻中です...");
 
       await liff.init({ liffId: LIFF_ID });
 
       if (!liff.isLoggedIn()) {
+        // ログインしていなければLINEログインへ
         liff.login();
         return;
       }
 
       const mode = getMode();
       if (!mode) {
-        show("⚠️ mode指定がありません。\n?mode=in または ?mode=out を付けて起動してください。");
+        show("⚠️ mode 指定がありません。\n?mode=in または ?mode=out を付けて起動してください。");
         return;
       }
       if (mode !== "in" && mode !== "out") {
@@ -87,7 +108,6 @@
         const res = await fetch(endpoint, {
           method: "GET",
           cache: "no-store",
-          // ※ no-cors を外すことで JSON を読めるようにする
         });
 
         if (!res.ok) {
@@ -96,7 +116,7 @@
 
         data = await res.json();
       } catch (err) {
-        show("⚠️ ネットワークエラーっぽいです\nmessage: " + err.message);
+        show("⚠️ ネットワークエラーっぽいです。\nmessage: " + err.message);
         return;
       }
 
@@ -105,25 +125,37 @@
         return;
       }
 
-      // ★ エラー時：GAS側のエラーメッセージをそのまま表示
-      if (!data.ok) {
-        show(data.message); // 例）「⚠️ 本日のシフトが登録されていないため、出勤打刻できません…」
+      // GAS側で { ok, mode, code, message } を返す想定
+      const ok   = (typeof data.ok === "boolean") ? data.ok : !String(data.message).startsWith("⚠️");
+      const code = data.code || inferCodeFromMessage(mode, data.message);
+
+      // 失敗系はGASのメッセージをそのまま表示
+      if (!ok) {
+        show(data.message);
         return;
       }
 
-      // ★ 正常時：今までどおりの固定メッセージ
-      //   （もし recordClockIn の文言をそのまま出したければ show(data.message); に変えてOK）
-      if (mode === "in") {
-        show("✅ 出勤の打刻が完了しました。\nこの画面を閉じていただいて大丈夫です。");
+      // 成功系：code を見てざっくりヘッダを変える（中身はGASのメッセージ）
+      if (code === "clockin_ok") {
+        show("✅ 出勤打刻が完了しました。\n\n" + data.message);
+      } else if (code === "clockout_ok") {
+        show("🌙 退勤打刻が完了しました。\n\n" + data.message);
+      } else if (code === "clockin_already" || code === "clockout_already") {
+        // 既に打刻済み
+        show("ℹ️ すでに打刻済みです。\n\n" + data.message);
+      } else if (code === "clockin_no_shift" || code === "clockout_no_shift") {
+        // シフト未登録
+        show("⚠️ シフト未登録のため打刻できませんでした。\n\n" + data.message);
       } else {
-        show("🌙 退勤の打刻が完了しました。\nこの画面を閉じていただいて大丈夫です。");
+        // よくわからないけど成功扱い → メッセージそのまま
+        show(data.message);
       }
 
-    } catch(err){
+    } catch (err) {
       console.error(err);
-      show("⚠️ 想定外のエラー:\n" + (err.message || String(err)));
+      show("⚠️ 想定外のエラーが発生しました。\n" + (err.message || String(err)));
     }
   })();
-</script>
+  </script>
 </body>
 </html>
